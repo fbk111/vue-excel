@@ -1,12 +1,6 @@
 <template>
   <div class="AgGridVue1">
-    <el-menu :default-active="activeIndex" class="el-menu-demo" mode="horizontal" background-color="#545c64"
-      text-color="#fff" active-text-color="#ffd04b">
-      <el-menu-item index="1">
-        <el-upload :on-change="handleSelectFile">excel导入</el-upload>
-      </el-menu-item>
-
-    </el-menu>
+    <ContextMenu />
     <AgGridVue :id="agTableOptions.id || 'ag-table'" :style="agTableOptions.style || { height: '95vh', width: '100%' }"
       :class="[`ag-theme-${agTableOptions.theme}`]" :grid-options="agTableOptions.gridOptions"
       :column-defs="agTableOptions.columnDefs" :row-data="agTableOptions.rowData" :enable-col-resize="true"
@@ -15,11 +9,16 @@
 </template>
 <script>
 import { AgGridVue } from 'ag-grid-vue'
-
+import { read, utils, write } from 'xlsx'
+import ContextMenu from './ContextMenu.vue'
 export default {
   name: 'AgGridVue1',
   components: {
-    AgGridVue
+    AgGridVue,
+    ContextMenu
+  },
+  mounted() {
+    console.log(this.parseExcel)
   },
   data() {
     return {
@@ -189,10 +188,117 @@ export default {
     }
   },
   methods: {
-    handleSelectFile(file, fileList) {
-      if (fileList.length > 1) {
-        fileList.shift();
-      }
+    onContextmenu(event) {
+      console.log(event)
+      this.$contextmenu({
+        items: [
+          {
+            label: "返回(B)",
+            onClick: () => {
+              this.message = "返回(B)";
+              console.log("返回(B)");
+            }
+          },
+          { label: "前进(F)", disabled: true },
+          { label: "重新加载(R)", divided: true, icon: "el-icon-refresh" },
+          { label: "另存为(A)..." },
+          { label: "打印(P)...", icon: "el-icon-printer" },
+          { label: "投射(C)...", divided: true },
+          {
+            label: "使用网页翻译(T)",
+            divided: true,
+            minWidth: 0,
+            children: [{ label: "翻译成简体中文" }, { label: "翻译成繁体中文" }]
+          },
+          {
+            label: "截取网页(R)",
+            minWidth: 0,
+            children: [
+              {
+                label: "截取可视化区域",
+                onClick: () => {
+                  this.message = "截取可视化区域";
+                  console.log("截取可视化区域");
+                }
+              },
+              { label: "截取全屏" }
+            ]
+          },
+          { label: "查看网页源代码(V)", icon: "el-icon-view" },
+          { label: "检查(N)" }
+        ],
+        event, // 鼠标事件信息
+        customClass: "custom-class", // 自定义菜单 class
+        zIndex: 3, // 菜单样式 z-index
+        minWidth: 230 // 主菜单最小宽度
+      });
+      return false
+    },
+    exportExcel() {
+      const workbook = utils.book_new();
+      console.log(this.agTableOptions.rowData)
+      const worksheet = utils.json_to_sheet(this.agTableOptions.rowData);
+      utils.book_append_sheet(workbook, worksheet, 'Sheet1');
+      const excelBuffer = write(workbook, { bookType: 'xlsx', type: 'array' });
+      this.saveExcelFile(excelBuffer, 'export.xlsx');
+    },
+    saveExcelFile(buffer, fileName) {
+      const data = new Blob([buffer], { type: 'application/octet-stream' });
+      const url = window.URL.createObjectURL(data);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', fileName);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    },
+    handleSelectFile(file) {
+      let reader = new FileReader();
+      let _this = this
+      reader.onload = function (e) {
+        _this.parseExcel(e.target.result);
+      };
+      reader.readAsArrayBuffer(file);
+    },
+    parseExcel(data) {
+      const workbook = read(data); // 从原始数据获取工作簿
+      // 后端使用可以使用 readFile() 方法直接读取文件
+      var first_sheet_name = workbook.SheetNames[0]; // 获得第一个工作表名称
+
+      const worksheet = workbook.Sheets[first_sheet_name]; // 获取工作表
+
+      console.log(worksheet)
+      let jsonData = utils.sheet_to_json(worksheet, { header: 1 });
+
+      console.log(jsonData)
+
+      this.renderExcelRow(jsonData, jsonData[0])
+      this.renderExcelHeader(jsonData[0])
+
+    },
+    renderExcelHeader(headerRow) {
+      this.agTableOptions.columnDefs = headerRow.map((header) => ({
+        headerName: header,
+        field: header,
+        editable: true,
+        // checkboxSelection: true
+      }));
+      this.agTableOptions.columnDefs[0].checkboxSelection = true
+
+    },
+    renderExcelRow(rowData, headerData) {
+      let sliceData = rowData.slice(1)
+      const updateList = []
+      let update = {}
+      sliceData.forEach(item => {
+        update = {}
+        headerData.forEach((key, index) => {
+          update[key] = item[index]
+        })
+        updateList.push(update)
+      })
+      console.log(updateList)
+      this.agTableOptions.rowData = updateList
     },
     onGridReady(params) {
       this.agTable = params

@@ -10,6 +10,10 @@ import ElementUI from 'element-ui'
 // 加载 element 组件库的样式
 import 'element-ui/lib/theme-chalk/index.css'
 
+import contentmenu from 'v-contextmenu'
+import 'v-contextmenu/dist/index.css'
+
+Vue.use(contentmenu)
 // 全局注册 element 组件库
 Vue.config.productionTip = false
 Vue.use(ElementUI)
